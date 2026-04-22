@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "~/env";
 
@@ -60,4 +60,68 @@ export const getDocumentUploadUrl = async (
   );
 
   return url;
+};
+
+export const putDocument = async ({
+  key,
+  body,
+  fileType,
+  bucket = DEFAULT_BUCKET,
+}: {
+  key: string;
+  body: Buffer | Uint8Array | string;
+  fileType: string;
+  bucket?: string;
+}) => {
+  const s3Client = getClient();
+
+  if (!s3Client) {
+    throw new Error("R2 is not configured");
+  }
+
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: body,
+      ContentType: fileType,
+    })
+  );
+
+  return {
+    bucket,
+    key,
+  };
+};
+
+export const getDocumentDownloadUrl = async ({
+  key,
+  bucket = DEFAULT_BUCKET,
+  fileName,
+}: {
+  key: string;
+  bucket?: string;
+  fileName?: string | null;
+}) => {
+  const s3Client = getClient();
+
+  if (!s3Client) {
+    throw new Error("R2 is not configured");
+  }
+
+  return getSignedUrl(
+    s3Client,
+    new GetObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      ...(fileName
+        ? {
+            ResponseContentDisposition: `attachment; filename="${fileName.replace(/"/g, "")}"`,
+          }
+        : {}),
+    }),
+    {
+      expiresIn: 3600,
+    }
+  );
 };

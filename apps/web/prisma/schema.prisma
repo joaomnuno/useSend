@@ -125,6 +125,7 @@ model Team {
   suppressionList  SuppressionList[]
   webhookEndpoints Webhook[]
   webhookCalls     WebhookCall[]
+  inboundEmails    InboundEmail[]
 }
 
 model TeamInvite {
@@ -200,6 +201,7 @@ model Domain {
   updatedAt     DateTime     @updatedAt
   team          Team         @relation(fields: [teamId], references: [id], onDelete: Cascade)
   apiKeys       ApiKey[]
+  inboundEmails InboundEmail[]
 }
 
 enum ApiPermission {
@@ -240,6 +242,10 @@ enum EmailStatus {
   SUPPRESSED
 }
 
+enum InboundEmailProvider {
+  SES
+}
+
 model Email {
   id           String       @id @default(cuid())
   sesEmailId   String?      @unique
@@ -268,6 +274,54 @@ model Email {
 
   @@index([campaignId, contactId])
   @@index([createdAt(sort: Desc)])
+}
+
+model InboundEmail {
+  id               String               @id @default(cuid())
+  provider         InboundEmailProvider
+  externalId       String
+  teamId           Int
+  domainId         Int
+  from             String
+  to               String[]
+  cc               String[]
+  bcc              String[]
+  replyTo          String[]
+  subject          String?
+  text             String?
+  html             String?
+  headers          Json?
+  receivedAt       DateTime
+  sourceBucket     String?
+  sourceObjectKey  String?
+  rawStorageBucket String?
+  rawStorageKey    String?
+  rawSize          Int?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  team             Team                 @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  domain           Domain               @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  attachments      InboundEmailAttachment[]
+
+  @@unique([provider, externalId])
+  @@index([teamId, domainId, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+}
+
+model InboundEmailAttachment {
+  id                 String       @id @default(cuid())
+  inboundEmailId     String
+  filename           String?
+  contentType        String?
+  contentDisposition String?
+  contentId          String?
+  size               Int?
+  storageBucket      String?
+  storageKey         String?
+  createdAt          DateTime     @default(now())
+  inboundEmail       InboundEmail @relation(fields: [inboundEmailId], references: [id], onDelete: Cascade)
+
+  @@index([inboundEmailId])
 }
 
 model CampaignEmail {

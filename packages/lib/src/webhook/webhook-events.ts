@@ -29,6 +29,7 @@ export const EmailEvents = [
   "email.suppressed",
   "email.opened",
   "email.clicked",
+  "email.received",
 ] as const;
 
 export type EmailWebhookEventType = (typeof EmailEvents)[number];
@@ -153,6 +154,28 @@ export type EmailClickedPayload = EmailBasePayload & {
   };
 };
 
+export type InboundEmailAttachmentPayload = {
+  id: string;
+  filename?: string | null;
+  contentType?: string | null;
+  size?: number | null;
+};
+
+export type EmailReceivedPayload = {
+  id: string;
+  provider: "ses";
+  externalId: string;
+  receivedAt: string;
+  from: string;
+  to: Array<string>;
+  cc: Array<string>;
+  bcc: Array<string>;
+  replyTo: Array<string>;
+  subject?: string | null;
+  domainId?: number | null;
+  attachments: Array<InboundEmailAttachmentPayload>;
+};
+
 export type WebhookTestPayload = {
   test: boolean;
   webhookId: string;
@@ -173,6 +196,7 @@ export type EmailEventPayloadMap = {
   "email.suppressed": EmailSuppressedPayload;
   "email.opened": EmailOpenedPayload;
   "email.clicked": EmailClickedPayload;
+  "email.received": EmailReceivedPayload;
 };
 
 export type DomainEventPayloadMap = {
@@ -211,4 +235,4 @@ export type WebhookEventData = {
   [T in WebhookEventType]: WebhookEvent<T>;
 }[WebhookEventType];
 
-export const WEBHOOK_EVENT_VERSION = "2026-01-18";
+export const WEBHOOK_EVENT_VERSION = "2026-04-22";

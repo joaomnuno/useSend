@@ -32,6 +32,7 @@ import emailTimeSeries from "./api/analytics/email-time-series";
 import reputationMetricsData from "./api/analytics/reputation-metrics-data";
 import bulkAddContactsHandle from "./api/contacts/bulk-add-contacts";
 import bulkDeleteContacts from "./api/contacts/bulk-delete-contacts";
+import getInboundEmail from "./api/inbound/get-inbound-email";
 
 
 export const app = getApp();
@@ -45,6 +46,7 @@ deleteDomain(app);
 
 /**Email related APIs */
 getEmail(app);
+getInboundEmail(app);
 listEmails(app);
 sendEmail(app);
 sendBatch(app);
