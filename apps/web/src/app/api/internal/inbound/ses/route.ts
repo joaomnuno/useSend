@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "crypto";
 import { ZodError } from "zod";
 import { env } from "~/env";
+import { logger } from "~/server/logger/log";
 import {
   InboundEmailService,
   sesInboundNotificationSchema,
@@ -14,6 +15,10 @@ export async function POST(req: Request) {
   }
 
   try {
+    if (!req.headers.get("content-type")?.includes("application/json")) {
+      return Response.json({ error: "Expected application/json payload" }, { status: 415 });
+    }
+
     const body = await req.json();
     const payload = sesInboundNotificationSchema.parse(body);
     const result = await InboundEmailService.ingestSesNotification(payload);
@@ -38,9 +43,16 @@ export async function POST(req: Request) {
       );
     }
 
+    logger.error(
+      {
+        error,
+      },
+      "[SES Inbound Route]: Failed to ingest inbound email"
+    );
+
     return Response.json(
       {
-        error: error instanceof Error ? error.message : "Inbound email ingestion failed",
+        error: "Inbound email ingestion failed",
       },
       { status: 500 }
     );

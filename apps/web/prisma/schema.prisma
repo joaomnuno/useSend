@@ -283,10 +283,10 @@ model InboundEmail {
   teamId           Int
   domainId         Int
   from             String
-  to               String[]
-  cc               String[]
-  bcc              String[]
-  replyTo          String[]
+  to               String[]             @default([])
+  cc               String[]             @default([])
+  bcc              String[]             @default([])
+  replyTo          String[]             @default([])
   subject          String?
   text             String?
   html             String?

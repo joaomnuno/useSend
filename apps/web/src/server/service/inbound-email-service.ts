@@ -1,9 +1,9 @@
 import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import {
-  InboundEmailProvider,
   type InboundEmailAttachment,
   type Prisma,
 } from "@prisma/client";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { type AddressObject, type Attachment, simpleParser } from "mailparser";
 import { z } from "zod";
 import { env } from "~/env";
@@ -49,6 +49,7 @@ export const sesInboundNotificationSchema = z.object({
 export type SesInboundNotification = z.infer<typeof sesInboundNotificationSchema>;
 
 type InboundHeader = z.infer<typeof sesHeaderSchema>;
+const SES_PROVIDER = "SES" as const;
 
 type InboundEmailWithAttachments = Prisma.InboundEmailGetPayload<{
   include: {
@@ -61,7 +62,7 @@ export class InboundEmailService {
     const existing = await db.inboundEmail.findUnique({
       where: {
         provider_externalId: {
-          provider: InboundEmailProvider.SES,
+          provider: SES_PROVIDER,
           externalId: payload.mail.messageId,
         },
       },
@@ -78,6 +79,7 @@ export class InboundEmailService {
     }
 
     const rawEmail = await getRawEmailFromS3(payload.s3);
+    assertInboundRawEmailSize(rawEmail.length);
     const parsedEmail = await simpleParser(rawEmail);
     const receivedAt = getReceivedAt(payload);
     const recipients = dedupeStrings([
@@ -91,27 +93,21 @@ export class InboundEmailService {
       throw new Error("Inbound email is missing a sender address");
     }
 
-    const inboundEmail = await db.inboundEmail.create({
-      data: {
-        provider: InboundEmailProvider.SES,
-        externalId: payload.mail.messageId,
-        teamId: domain.teamId,
-        domainId: domain.id,
-        from,
-        to: recipients,
-        cc: normalizeAddresses(parsedEmail.cc),
-        bcc: normalizeAddresses(parsedEmail.bcc),
-        replyTo: normalizeAddresses(parsedEmail.replyTo),
-        subject: parsedEmail.subject ?? payload.mail.commonHeaders?.subject ?? null,
-        text: parsedEmail.text ?? null,
-        html: normalizeHtml(parsedEmail.html),
-        headers: payload.mail.headers as Prisma.InputJsonValue,
-        receivedAt,
-        sourceBucket: payload.s3.bucket,
-        sourceObjectKey: payload.s3.key,
-        rawSize: rawEmail.length,
-      },
+    const createdInboundEmail = await createInboundEmail({
+      payload,
+      domain,
+      from,
+      recipients,
+      parsedEmail,
+      receivedAt,
+      rawSize: rawEmail.length,
     });
+
+    if (!createdInboundEmail.created) {
+      return createdInboundEmail;
+    }
+
+    const inboundEmail = createdInboundEmail.email;
 
     const rawStorage = await uploadRawEmailIfConfigured(inboundEmail.id, rawEmail);
     if (rawStorage) {
@@ -221,6 +217,71 @@ export class InboundEmailService {
           downloadUrl: await getAttachmentDownloadUrl(attachment),
         }))
       ),
+    };
+  }
+}
+
+async function createInboundEmail(params: {
+  payload: SesInboundNotification;
+  domain: { id: number; teamId: number };
+  from: string;
+  recipients: string[];
+  parsedEmail: Awaited<ReturnType<typeof simpleParser>>;
+  receivedAt: Date;
+  rawSize: number;
+}) {
+  try {
+    const email = await db.inboundEmail.create({
+      data: {
+        provider: SES_PROVIDER,
+        externalId: params.payload.mail.messageId,
+        teamId: params.domain.teamId,
+        domainId: params.domain.id,
+        from: params.from,
+        to: params.recipients,
+        cc: normalizeAddresses(params.parsedEmail.cc),
+        bcc: normalizeAddresses(params.parsedEmail.bcc),
+        replyTo: normalizeAddresses(params.parsedEmail.replyTo),
+        subject:
+          params.parsedEmail.subject ?? params.payload.mail.commonHeaders?.subject ?? null,
+        text: params.parsedEmail.text ?? null,
+        html: normalizeHtml(params.parsedEmail.html),
+        headers: params.payload.mail.headers as Prisma.InputJsonValue,
+        receivedAt: params.receivedAt,
+        sourceBucket: params.payload.s3.bucket,
+        sourceObjectKey: params.payload.s3.key,
+        rawSize: params.rawSize,
+      },
+    });
+
+    return {
+      created: true as const,
+      email,
+    };
+  } catch (error) {
+    if (!isUniqueInboundConflict(error)) {
+      throw error;
+    }
+
+    const email = await db.inboundEmail.findUnique({
+      where: {
+        provider_externalId: {
+          provider: SES_PROVIDER,
+          externalId: params.payload.mail.messageId,
+        },
+      },
+      include: {
+        attachments: true,
+      },
+    });
+
+    if (!email) {
+      throw error;
+    }
+
+    return {
+      created: false as const,
+      email,
     };
   }
 }
@@ -490,4 +551,19 @@ function normalizeHtml(html: string | false | undefined) {
 
 function sanitizeFileName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+}
+
+function isUniqueInboundConflict(error: unknown) {
+  return error instanceof PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+function assertInboundRawEmailSize(rawSize: number) {
+  const maxBytes = env.INBOUND_MAX_RAW_EMAIL_BYTES ?? 20 * 1024 * 1024;
+  if (rawSize <= maxBytes) {
+    return;
+  }
+
+  throw new Error(
+    `Inbound email exceeds configured size limit (${rawSize} bytes > ${maxBytes} bytes)`
+  );
 }
