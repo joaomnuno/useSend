@@ -1,0 +1,16 @@
+UPDATE "InboundEmail"
+SET
+  "to" = COALESCE("to", ARRAY[]::TEXT[]),
+  "cc" = COALESCE("cc", ARRAY[]::TEXT[]),
+  "bcc" = COALESCE("bcc", ARRAY[]::TEXT[]),
+  "replyTo" = COALESCE("replyTo", ARRAY[]::TEXT[]);
+
+ALTER TABLE "InboundEmail"
+  ALTER COLUMN "to" SET DEFAULT ARRAY[]::TEXT[],
+  ALTER COLUMN "to" SET NOT NULL,
+  ALTER COLUMN "cc" SET DEFAULT ARRAY[]::TEXT[],
+  ALTER COLUMN "cc" SET NOT NULL,
+  ALTER COLUMN "bcc" SET DEFAULT ARRAY[]::TEXT[],
+  ALTER COLUMN "bcc" SET NOT NULL,
+  ALTER COLUMN "replyTo" SET DEFAULT ARRAY[]::TEXT[],
+  ALTER COLUMN "replyTo" SET NOT NULL;

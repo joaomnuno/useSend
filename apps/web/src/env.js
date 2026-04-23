@@ -60,6 +60,10 @@ export const env = createEnv({
     S3_COMPATIBLE_PUBLIC_URL: z.string().optional(),
     S3_COMPATIBLE_BUCKET: z.string().optional(),
     INBOUND_INTERNAL_SECRET: z.string().optional(),
+    INBOUND_MAX_RAW_EMAIL_BYTES: z
+      .string()
+      .optional()
+      .transform((str) => (str ? parseInt(str, 10) : undefined)),
     STRIPE_SECRET_KEY: z.string().optional(),
     STRIPE_BASIC_PRICE_ID: z.string().optional(),
     STRIPE_BASIC_USAGE_PRICE_ID: z.string().optional(),
@@ -126,6 +130,7 @@ export const env = createEnv({
     S3_COMPATIBLE_PUBLIC_URL: process.env.S3_COMPATIBLE_PUBLIC_URL,
     S3_COMPATIBLE_BUCKET: process.env.S3_COMPATIBLE_BUCKET,
     INBOUND_INTERNAL_SECRET: process.env.INBOUND_INTERNAL_SECRET,
+    INBOUND_MAX_RAW_EMAIL_BYTES: process.env.INBOUND_MAX_RAW_EMAIL_BYTES,
     STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
     STRIPE_BASIC_PRICE_ID: process.env.STRIPE_BASIC_PRICE_ID,
     STRIPE_BASIC_USAGE_PRICE_ID: process.env.STRIPE_BASIC_USAGE_PRICE_ID,

@@ -1,4 +1,4 @@
-import { InboundEmailProvider } from "@prisma/client";
+import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -103,7 +103,7 @@ describe("InboundEmailService", () => {
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({
         id: "in_123",
-        provider: InboundEmailProvider.SES,
+        provider: "SES",
         externalId: "ses-message-1",
         teamId: 7,
         domainId: 42,
@@ -180,7 +180,7 @@ describe("InboundEmailService", () => {
 
     mockDb.inboundEmail.create.mockResolvedValue({
       id: "in_123",
-      provider: InboundEmailProvider.SES,
+      provider: "SES",
       externalId: "ses-message-1",
       teamId: 7,
       domainId: 42,
@@ -286,7 +286,7 @@ describe("InboundEmailService", () => {
   it("returns an existing inbound message without reprocessing retries", async () => {
     mockDb.inboundEmail.findUnique.mockResolvedValue({
       id: "in_123",
-      provider: InboundEmailProvider.SES,
+      provider: "SES",
       externalId: "ses-message-1",
       teamId: 7,
       domainId: 42,
@@ -329,10 +329,97 @@ describe("InboundEmailService", () => {
     expect(mockWebhookEmit).not.toHaveBeenCalled();
   });
 
+  it("handles race conditions by returning the existing inbound email on unique conflicts", async () => {
+    const receivedAt = new Date("2026-04-22T10:00:00.000Z");
+    const createdAt = new Date("2026-04-22T10:00:01.000Z");
+
+    mockDb.inboundEmail.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "in_123",
+        provider: "SES",
+        externalId: "ses-message-1",
+        teamId: 7,
+        domainId: 42,
+        from: "sender@example.com",
+        to: ["reply@inbound.example.com"],
+        cc: [],
+        bcc: [],
+        replyTo: [],
+        subject: "Hello there",
+        text: "hello",
+        html: "<p>hello</p>",
+        headers: [],
+        receivedAt,
+        sourceBucket: "ses-bucket",
+        sourceObjectKey: "emails/message-1",
+        rawStorageBucket: null,
+        rawStorageKey: null,
+        rawSize: 11,
+        createdAt,
+        updatedAt: createdAt,
+        attachments: [],
+      });
+
+    mockSimpleParser.mockResolvedValue({
+      from: {
+        value: [{ address: "sender@example.com" }],
+      },
+      to: {
+        value: [{ address: "reply@inbound.example.com" }],
+      },
+      cc: null,
+      bcc: null,
+      replyTo: null,
+      subject: "Hello there",
+      text: "hello",
+      html: "<p>hello</p>",
+      attachments: [],
+    });
+
+    mockDb.domain.findMany.mockResolvedValue([
+      {
+        id: 42,
+        name: "inbound.example.com",
+        teamId: 7,
+      },
+    ]);
+
+    mockDb.inboundEmail.create.mockRejectedValue(
+      new PrismaClientKnownRequestError("Unique constraint failed", {
+        code: "P2002",
+        clientVersion: "test",
+      })
+    );
+
+    const result = await InboundEmailService.ingestSesNotification({
+      mail: {
+        messageId: "ses-message-1",
+        source: "sender@example.com",
+        destination: ["reply@inbound.example.com"],
+        timestamp: receivedAt.toISOString(),
+        headers: [],
+      },
+      receipt: {
+        recipients: ["reply@inbound.example.com"],
+        timestamp: receivedAt.toISOString(),
+      },
+      s3: {
+        bucket: "ses-bucket",
+        key: "emails/message-1",
+        region: "us-east-1",
+      },
+    });
+
+    expect(result.created).toBe(false);
+    expect(mockPutDocument).not.toHaveBeenCalled();
+    expect(mockWebhookEmit).not.toHaveBeenCalled();
+  });
+
   it("returns signed download URLs for raw MIME and attachments", async () => {
     mockDb.inboundEmail.findFirst.mockResolvedValue({
       id: "in_123",
-      provider: InboundEmailProvider.SES,
+      provider: "SES",
       externalId: "ses-message-1",
       teamId: 7,
       domainId: 42,

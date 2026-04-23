@@ -67,6 +67,10 @@
             ]
           },
           {
+            "group": "Inbound",
+            "pages": ["api-reference/inbound/get-inbound-email"]
+          },
+          {
             "group": "Contact Books",
             "pages": [
               "api-reference/contacts/list-contact-books",

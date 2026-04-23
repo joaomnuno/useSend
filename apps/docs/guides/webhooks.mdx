@@ -50,6 +50,7 @@ Webhooks allow you to receive HTTP POST requests to your server when events occu
 | `email.suppressed`        | Email was suppressed (recipient on suppression list) |
 | `email.opened`            | Recipient opened the email                           |
 | `email.clicked`           | Recipient clicked a link in the email                |
+| `email.received`          | Inbound email was received on your domain            |
 
 ### Contact events
 
@@ -444,6 +445,32 @@ Includes click tracking details:
     ip?: string;           // IP address
     platform?: string;     // Detected platform
   }
+}
+```
+
+#### email.received
+
+Includes details for emails received via your configured inbound domain:
+
+```typescript
+{
+  id: string;               // Inbound email ID
+  provider: "ses";          // Inbound provider
+  externalId: string;       // Provider message ID
+  receivedAt: string;       // ISO 8601 timestamp
+  from: string;             // Sender address
+  to: string[];             // Recipient addresses
+  cc: string[];             // Cc addresses
+  bcc: string[];            // Bcc addresses
+  replyTo: string[];        // Reply-To addresses
+  subject?: string | null;  // Message subject
+  domainId?: number | null; // Matched domain ID
+  attachments: Array<{
+    id: string;
+    filename?: string | null;
+    contentType?: string | null;
+    size?: number | null;
+  }>;
 }
 ```
 
